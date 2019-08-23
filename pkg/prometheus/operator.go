@@ -109,7 +109,7 @@ func (labels *Labels) Merge(otherLabels map[string]string) map[string]string {
 	for key, value := range otherLabels {
 		mergedLabels[key] = value
 	}
-
+	//就label value值会覆盖新label value值
 	for key, value := range labels.LabelsMap {
 		mergedLabels[key] = value
 	}
@@ -460,6 +460,7 @@ func (c *Operator) Run(stopc <-chan struct{}) error {
 	return nil
 }
 
+//从消息队列中获得key
 func (c *Operator) keyFunc(obj interface{}) (string, bool) {
 	k, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {

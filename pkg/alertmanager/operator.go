@@ -31,7 +31,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	extensionsobj "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -230,16 +230,20 @@ func (c *Operator) Run(stopc <-chan struct{}) error {
 	case <-stopc:
 		return nil
 	}
-
+	//先创建AlertManager各种资源
 	go c.worker()
 
+	// 启动各种informer List watch Kubernetes 信息
 	go c.alrtInf.Run(stopc)
 	go c.ssetInf.Run(stopc)
+	//等待inform 同步
 	if err := c.waitForCacheSync(stopc); err != nil {
 		return err
 	}
+	//添加回调函数
 	c.addHandlers()
 
+	//接收终止信号
 	<-stopc
 	return nil
 }
@@ -299,6 +303,7 @@ func (c *Operator) enqueueForNamespace(ns string) {
 // worker runs a worker thread that just dequeues items, processes them
 // and marks them done. It enforces that the syncHandler is never invoked
 // concurrently with the same key.
+// 单线程启动Controller
 func (c *Operator) worker() {
 	for c.processNextWorkItem() {
 	}
@@ -311,6 +316,7 @@ func (c *Operator) processNextWorkItem() bool {
 	}
 	defer c.queue.Done(key)
 
+	//sync函数就是我们处理syshander 函数的主要逻辑结构，主要目的是保证CRD对象的各种资源对象保持一致。
 	err := c.sync(key.(string))
 	if err == nil {
 		c.queue.Forget(key)
@@ -324,6 +330,7 @@ func (c *Operator) processNextWorkItem() bool {
 	return true
 }
 
+//通过AlertManager statefulset对象获取通过AlertManager对象
 func (c *Operator) alertmanagerForStatefulSet(sset interface{}) *monitoringv1.Alertmanager {
 	key, ok := c.keyFunc(sset)
 	if !ok {
@@ -423,6 +430,7 @@ func (c *Operator) handleStatefulSetUpdate(oldo, curo interface{}) {
 	}
 }
 
+//初始化：获取或创建AlertManager的各种对象，保证各种对象之间关系保持一致：Alertmanager、StatefulSetService、StatefulSets。
 func (c *Operator) sync(key string) error {
 	obj, exists, err := c.alrtInf.GetIndexer().GetByKey(key)
 	if err != nil {
@@ -567,6 +575,8 @@ func needsUpdate(pod *v1.Pod, tmpl v1.PodTemplateSpec) bool {
 // TODO(brancz): Remove this function once Kubernetes 1.7 compatibility is
 // dropped.
 // Starting with Kubernetes 1.8 OwnerReferences are properly handled for CRDs.
+
+//删除AlertManager 对应的 StatefulSet和 pod。很好奇，不直接删除StatefulSet，对应的pod也会被删除。而是选择阻塞形式删除pod，然后再删除StatefulSet
 func (c *Operator) destroyAlertmanager(key string) error {
 	ssetKey := alertmanagerKeyToStatefulSetKey(key)
 	obj, exists, err := c.ssetInf.GetStore().GetByKey(ssetKey)
@@ -609,6 +619,7 @@ func (c *Operator) destroyAlertmanager(key string) error {
 	return nil
 }
 
+//创建AlertManager CRD对象，并运行（阻塞）
 func (c *Operator) createCRDs() error {
 	crds := []*extensionsobj.CustomResourceDefinition{
 		k8sutil.NewCustomResourceDefinition(c.config.CrdKinds.Alertmanager, c.config.CrdGroup, c.config.Labels.LabelsMap, c.config.EnableValidation),

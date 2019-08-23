@@ -19,7 +19,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/coreos/prometheus-operator/pkg/admission"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -27,6 +26,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/coreos/prometheus-operator/pkg/admission"
 
 	alertmanagercontroller "github.com/coreos/prometheus-operator/pkg/alertmanager"
 	"github.com/coreos/prometheus-operator/pkg/api"
@@ -40,7 +41,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 )
 
@@ -92,6 +93,7 @@ func (n namespaces) asSlice() []string {
 	return ns
 }
 
+//启动webserver
 func serve(srv *http.Server, listener net.Listener, logger log.Logger) func() error {
 	return func() error {
 		logger.Log("msg", "Staring insecure server on :8080")

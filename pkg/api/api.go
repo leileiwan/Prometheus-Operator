@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
+	v1 "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 	monitoringclient "github.com/coreos/prometheus-operator/pkg/client/versioned"
 	"github.com/coreos/prometheus-operator/pkg/k8sutil"
 	"github.com/coreos/prometheus-operator/pkg/prometheus"
@@ -36,6 +36,7 @@ type API struct {
 	logger  log.Logger
 }
 
+//创建接口为外部使用
 func New(conf prometheus.Config, l log.Logger) (*API, error) {
 	cfg, err := k8sutil.NewClusterConfig(conf.Host, conf.TLSInsecure, &conf.TLSConfig)
 	if err != nil {
@@ -63,6 +64,7 @@ var (
 	prometheusRoute = regexp.MustCompile("/apis/monitoring.coreos.com/" + v1.Version + "/namespaces/(.*)/prometheuses/(.*)/status")
 )
 
+//注入webserver 请求回调函数
 func (api *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", ok)
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
@@ -96,6 +98,7 @@ func parsePrometheusStatusUrl(path string) objectReference {
 	}
 }
 
+//http请求Prometheus状态
 func (api *API) prometheusStatus(w http.ResponseWriter, req *http.Request) {
 	or := parsePrometheusStatusUrl(req.URL.Path)
 

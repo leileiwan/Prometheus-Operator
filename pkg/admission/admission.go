@@ -58,6 +58,7 @@ func New(logger log.Logger) *Admission {
 	return &Admission{logger: logger}
 }
 
+//不同http请求返回给不同的回调函数
 func (a *Admission) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/admission-prometheusrules/validate", a.servePrometheusRulesValidate)
 	mux.HandleFunc("/admission-prometheusrules/mutate", a.servePrometheusRulesMutate)
@@ -78,6 +79,7 @@ func (a *Admission) servePrometheusRulesValidate(w http.ResponseWriter, r *http.
 	a.serveAdmission(w, r, a.validatePrometheusRules)
 }
 
+//返回标准出错结构体，这时已经知道处理异常，只是将信息标准化返回
 func toAdmissionResponseFailure(message string, errors []error) *v1beta1.AdmissionResponse {
 	r := &v1beta1.AdmissionResponse{
 		Result: &metav1.Status{
@@ -97,6 +99,8 @@ func toAdmissionResponseFailure(message string, errors []error) *v1beta1.Admissi
 	return r
 }
 
+
+//这里主要是取出请求信息，然后传递给回调函数处理，最后将 回调函数处理结果返回。这时http在服务端处理基本结束，下面需要分析每个 回调函数的内容
 func (a *Admission) serveAdmission(w http.ResponseWriter, r *http.Request, admit admitFunc) {
 	var body []byte
 	if r.Body != nil {
@@ -146,6 +150,7 @@ func (a *Admission) serveAdmission(w http.ResponseWriter, r *http.Request, admit
 	}
 }
 
+//这里是修改rule规则
 func (a *Admission) mutatePrometheusRules(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	level.Debug(a.logger).Log("msg", "Mutating prometheusrules")
 
@@ -172,6 +177,7 @@ func (a *Admission) mutatePrometheusRules(ar v1beta1.AdmissionReview) *v1beta1.A
 	return reviewResponse
 }
 
+//验证rule规则
 func (a *Admission) validatePrometheusRules(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	(*a.validationTriggeredCounter).Inc()
 	level.Debug(a.logger).Log("msg", "Validating prometheusrules")
@@ -204,6 +210,8 @@ func (a *Admission) validatePrometheusRules(ar v1beta1.AdmissionReview) *v1beta1
 	return &v1beta1.AdmissionResponse{Allowed: true}
 }
 
+
+//这部分函数和serveAdmission逻辑结构非常相识，并且在本文件并不需要调用serve文件
 func (a *Admission) serve(w http.ResponseWriter, r *http.Request, admit admitFunc) {
 	var body []byte
 	if r.Body != nil {

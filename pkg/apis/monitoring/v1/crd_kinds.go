@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//定义了Prometheus 对象的集中类型，并且设置统一接口为几种类型赋值（但是具体spce由什么元素组成没有给出）
+//但是真正的类型定义是由types.go完成的。
+//不知道这个文件是作为什么用的
 package v1
 
 import (

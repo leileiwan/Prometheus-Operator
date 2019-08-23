@@ -27,7 +27,7 @@ import (
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
+	v1 "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
 const (
@@ -70,6 +70,7 @@ func stringMapToMapSlice(m map[string]string) yaml.MapSlice {
 	return res
 }
 
+//生成Prometheus TSL配置信息
 func addTLStoYaml(cfg yaml.MapSlice, tls *v1.TLSConfig) yaml.MapSlice {
 	if tls != nil {
 		tlsConfig := yaml.MapSlice{
@@ -92,6 +93,7 @@ func addTLStoYaml(cfg yaml.MapSlice, tls *v1.TLSConfig) yaml.MapSlice {
 	return cfg
 }
 
+//额外添加两项ExternalLabels label信息
 func buildExternalLabels(p *v1.Prometheus) yaml.MapSlice {
 	m := map[string]string{}
 
@@ -125,6 +127,7 @@ func buildExternalLabels(p *v1.Prometheus) yaml.MapSlice {
 		m[replicaExternalLabelName] = "$(POD_NAME)"
 	}
 
+	//在原有ExternalLabels基础上添加上面两个label
 	for n, v := range p.Spec.ExternalLabels {
 		m[n] = v
 	}
@@ -172,6 +175,7 @@ func (cg *configGenerator) generateConfig(
 		},
 	})
 
+	//Prometheus 所有rule文件路径添加在Prometheus.yml文件中
 	ruleFilePaths := []string{}
 	for _, name := range ruleConfigMapNames {
 		ruleFilePaths = append(ruleFilePaths, rulesDir+"/"+name+"/*.yaml")
@@ -206,9 +210,13 @@ func (cg *configGenerator) generateConfig(
 	var scrapeConfigs []yaml.MapSlice
 	for _, identifier := range sMonIdentifiers {
 		for i, ep := range sMons[identifier].Spec.Endpoints {
+			//这里很明显是通过service信息通过apiservice找到endpoint获取对应Prometheus target信息
+			//generateServiceMonitorConfig 实现过程非常关键
 			scrapeConfigs = append(scrapeConfigs, cg.generateServiceMonitorConfig(version, sMons[identifier], ep, i, apiserverConfig, basicAuthSecrets))
 		}
 	}
+	//有些pod是不通过service 暴露的，但是原理一致
+	//如何找endpoints，这里实现，这里和pMons结构体定义有关
 	for _, identifier := range pMonIdentifiers {
 		for i, ep := range pMons[identifier].Spec.PodMetricsEndpoints {
 			scrapeConfigs = append(scrapeConfigs, cg.generatePodMonitorConfig(version, pMons[identifier], ep, i, apiserverConfig, basicAuthSecrets))
@@ -216,6 +224,7 @@ func (cg *configGenerator) generateConfig(
 	}
 
 	var alertmanagerConfigs []yaml.MapSlice
+	//有报警规则我才在Prometheus.yml中添加报警信息
 	if p.Spec.Alerting != nil {
 		for _, am := range p.Spec.Alerting.Alertmanagers {
 			alertmanagerConfigs = append(alertmanagerConfigs, cg.generateAlertmanagerConfig(version, am, apiserverConfig, basicAuthSecrets))
@@ -297,7 +306,8 @@ func (cg *configGenerator) generateConfig(
 func (cg *configGenerator) generatePodMonitorConfig(version semver.Version, m *v1.PodMonitor, ep v1.PodMetricsEndpoint, i int, apiserverConfig *v1.APIServerConfig, basicAuthSecrets map[string]BasicAuthCredentials) yaml.MapSlice {
 	cfg := yaml.MapSlice{
 		{
-			Key:   "job_name",
+			Key: "job_name",
+			//我们example_appp在target显示的标题就是这样的格式，一模一样
 			Value: fmt.Sprintf("%s/%s/%d", m.Namespace, m.Name, i),
 		},
 		{
@@ -345,11 +355,14 @@ func (cg *configGenerator) generatePodMonitorConfig(version semver.Version, m *v
 	)
 	// Filter targets by pods selected by the monitor.
 	// Exact label matches.
+	//通过label选择pod关键地方
 	for k := range m.Spec.Selector.MatchLabels {
 		labelKeys = append(labelKeys, k)
 	}
 	sort.Strings(labelKeys)
 
+	//Prometheus在监控采集器时，并没有通过我们之前写配置文件那样通过ip 和端口去监听采集器信息
+	//而是采用Prometheus 注册机制实现，然后再通过label正则去过滤。非常巧合的是，endpoint本身是一个天然注册信息地方
 	for _, k := range labelKeys {
 		relabelings = append(relabelings, yaml.MapSlice{
 			{Key: "action", Value: "keep"},
@@ -419,6 +432,7 @@ func (cg *configGenerator) generatePodMonitorConfig(version semver.Version, m *v
 	}
 
 	// Filter targets based on correct port for the endpoint.
+	//666
 	if ep.Port != "" {
 		relabelings = append(relabelings, yaml.MapSlice{
 			{Key: "action", Value: "keep"},
@@ -472,7 +486,6 @@ func (cg *configGenerator) generatePodMonitorConfig(version semver.Version, m *v
 	// value for it. A single pod may potentially have multiple metrics
 	// endpoints, therefore the endpoints labels is filled with the ports name or
 	// as a fallback the port number.
-
 	relabelings = append(relabelings, yaml.MapSlice{
 		{Key: "target_label", Value: "job"},
 		{Key: "replacement", Value: fmt.Sprintf("%s/%s", m.GetNamespace(), m.GetName())},

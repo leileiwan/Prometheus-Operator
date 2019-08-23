@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -50,6 +50,8 @@ var (
 	probeTimeoutSeconds int32 = 3
 )
 
+//作为外部接口:被本包中Operator.go调用
+//创建针对AlertManager 的statefulset
 func makeStatefulSet(am *monitoringv1.Alertmanager, old *appsv1.StatefulSet, config Config) (*appsv1.StatefulSet, error) {
 	// TODO(fabxc): is this the right point to inject defaults?
 	// Ideally we would do it before storing but that's currently not possible.
@@ -141,6 +143,8 @@ func makeStatefulSet(am *monitoringv1.Alertmanager, old *appsv1.StatefulSet, con
 	return statefulset, nil
 }
 
+//作为外部函数被调用,调用的是本package中的Operator.go
+//作用是创建AlertManager对象的service
 func makeStatefulSetService(p *monitoringv1.Alertmanager, config Config) *v1.Service {
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
